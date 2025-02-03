@@ -4,3 +4,4 @@ Repositório para estudo de serviços de Database da AWS no contexto de Cloud Co
 
 * [Dynamo DB](./dynamo_db/)
 * [RDS](./rds/)
+* [Document DB](./document_db/)
