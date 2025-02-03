@@ -11,6 +11,7 @@ Estudos do AWS DynamoDB.
 > - [5. Capacidade de Leitura/ Escrita](#5-capacidade-de-leitura-escrita)
 > - [6. Dynamo DB Accelerator (DAX)](#6-dynamo-db-accelerator-dax)
 > - [7. Dynamo DB Streams](#7-dynamo-db-streams)
+> - [8. APIs do Dynamo DB](#8-apis-do-dynamo-db)
 
 ---
 
