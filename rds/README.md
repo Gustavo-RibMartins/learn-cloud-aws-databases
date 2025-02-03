@@ -5,6 +5,12 @@ Estudos do AWS RDS.
 > **Sumário**
 >
 > - [1. Introdução](#1-introdução)
+> - [2. Tipos de Classes de Instâncias](#2-tipos-de-classes-de-instâncias)
+> - [3. Multi-AZ](#3-multi-az)
+> - [4. Read Replica](#4-read-replica)
+> - [5. Backup](#5-backup)
+> - [6. Criptografia e Segurança](#6-criptografia-e-segurança)
+> - [7. Outras informações](#7-outras-informações)
 
 
 ---
