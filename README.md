@@ -2,5 +2,23 @@
 
 Repositório para estudo de serviços de Database da AWS no contexto de Cloud Computing.
 
-* [Dynamo DB](./dynamo_db/)
+---
+
+**Banco de Dados Relacional**
+
 * [RDS](./rds/)
+* [Amazon Aurora]()
+
+---
+
+**Banco de Dados NoSQL**
+
+* [Dynamo DB](./dynamo_db/)
+* [Document DB](./document_db/)
+* [Memory DB](./memory_db/)
+* [Amazon Keyspaces](./keyspaces/)
+* [Amazon Neptune](./neptune/)
+* [Amazon Timestream](./timestream/)
+* [Amazon ElastiCache]()
+
+---
