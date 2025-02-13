@@ -22,3 +22,9 @@ Repositório para estudo de serviços de Database da AWS no contexto de Cloud Co
 * [Amazon ElastiCache]()
 
 ---
+
+**Analytics**
+
+* [Redshift](./redshift/)
+
+---
