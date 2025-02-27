@@ -20,6 +20,24 @@ Estudos do Amazon Redshift.
 >   - [4.4. Otimizador de Consultas](#44-otimizador-de-consultas)
 >   - [4.5. Armazenamento em Cache dos Resultados](#45-armazenamento-em-cache-dos-resultados)
 > - [5. Gerenciamento do Workload](#5-gerenciamento-do-workload)
+> - [6. Distribuição de Dados](#6-distribuição-de-dados)
+>   - [6.1. Auto](#61-distribuição-auto)
+>   - [6.2. Even](#62-distribuição-even)
+>   - [6.3. Key](#63-distribuição-key)
+>   - [6.4. All](#64-distribuição-all)
+>   - [6.5. Designação de Estilos de Distribuição](#65-designação-de-estilos-de-distribuição)
+> - [7. Carregamento de Dados](#7-carregamento-de-dados)
+>   - [7.1. Copy Command](#71-copy-command)
+>   - [7.2. Insert Command](#72-insert-command)
+>   - [7.3. Carregamento por ordem de Sort Key](#73-carregamento-por-ordem-de-sort-key)
+>   - [7.4. Carregamento em Blocos Sequenciais](#74-carregamento-em-blocos-sequenciais)
+>   - [7.5. Narrow Tables](#75-narrow-tables)
+> - [8. Descarregamento de Dados](#8-descarregamento-de-dados)
+> - [9. Tabelas e Views do Sistema](#9-tabelas-e-views-de-sistema)
+> - [10. Vacuum](#10-vacuum)
+> - [11. Outros](#11-outros)
+>   - [11.1. DB Link](#111-db-link)
+>   - [11.2. Federated Queries](#112-federated-queries)
 
 ---
 
@@ -370,3 +388,305 @@ O uso da distribuição `ALL` multiplica as exigÊncias de espaço de armazename
 5. **Use a distribuição `AUTO` para as tabelas restantes.**
 
 Se uma tabela for amplamente desnormalizada e não participar de junções, ou se você não tiver uma opção clara de outro estilo de distribuição, use a distribuição `AUTO`.
+
+---
+
+## 7. Carregamento de Dados
+
+Há algumas maneiras de carregar dados em um banco de dados no Amazon Redshift:
+
+### 7.1. `COPY` command
+
+Executa uma ingestão de arquivos em lote a partir do S3, EMR, Dynamo DB ou outras origens remotas. Esse método utiliza processamento paralelo do Redshift, permitindo o carregamento de grandes quantidades de dados de forma muito mais eficiente do que instruções de `INSERT`.
+
+`COPY` consegue descriptografar dados.
+
+Suporta `gzip`, `lzop` e `bzip2` compression e faz compressão automática (option) através de análise dos dados que estão sendo carregados para uma compressão ótima de schema.
+
+Ao carregar dados com o comando `COPY`, o Redshift carrega todos os arquivos referenciados pelo prefixo do bucket do Amazon S3. Se o prefixo se referir a vários arquivos ou arquivos que podem ser divididos, o Redshift carregará os dados paralelamente, aproveitando a arquitetura MPP. Isso divide o workload entre os nós do cluster. Por outro lado, quando você carrega dados de um arquivo que não pode ser dividido, o Redshift é forçado a executar um carregamento serializado, que é muito mais lento.
+
+**Carregar dados de arquivos que podem ser divididos**
+
+Os seguintes arquivos podem ser divididos automaticamente quando seus dados são carregados:
+
+* Um arquivo CSV não compactado;
+* Um arquivo em colunas (Parquet/ORC).
+
+O Amazon Redshift divide automaticamente arquivos de 128 MB ou maiores em partes. Arquivos em colunas, especificamente Parquet e ORC, não serão divididos se tiverem menos de 128 MB. O Redshift usa slices trabalhando em paralelo para carregar os dados.
+
+**Carregar dados de arquivos que não podem ser divididos**
+
+Tipos de arquivo, como JSON ou CSV, quando compactados com outros algorítmos de compactação, como GZIP, não são divididos automaticamente. Desse modo, é recomendado dividir os dados manualmente em vários arquivos menores com tamanho semelhante, de 1 MB a 1 GB, após a compactação. Além disso, também é ideal que o número de arquivos seja um múltiplo do número de slices no cluster.
+
+> **STL_LOAD_COMMITS**
+>
+> Você pode consultar a tabela de sistema `stl_load_commits` para verificar se os arquivos foram carregados com sucesso com o comando `COPY`.
+
+Exemplo:
+
+```sql
+-- verificacao de carga na tabela TICKIT
+
+SELECT query, trim(filename) AS filename, curtime, status
+FROM stl_load_commits
+WHERE filename like '%tickit%' order by query;
+```
+
+![](./imagens/stl_load_commits.png)
+
+Para validar os arquivos de dados antes de realmente carregar os dados, use a opção `NOLOAD` com o comando `COPY`. O Amazon Redshift analisa o arquivo de entrada e exibe todos os erros que ocorrem.
+
+O exemplo a seguir usa a opção `NOLOAD` e nenhuma linha é realmente carregada na tabela.
+
+```sql
+COPY public.zipcode1
+FROM 's3://amzn-s3-demo-bucket/mydata/zipcode.csv' 
+DELIMITER ';' 
+IGNOREHEADER 1 REGION 'us-east-1'
+NOLOAD
+CREDENTIALS 'aws_iam_role=arn:aws:iam::123456789012:role/myRedshiftRole';
+```
+
+retorno:
+```
+Warnings:
+Load into table 'zipcode1' completed, 0 record(s) loaded successfully.  
+```
+
+---
+
+### 7.2. `INSERT` command
+
+Se o dado a ser carregado já está em outra tabela do Redshift, utiliza-se o comando `insert` para fazer a carga dos dados.
+
+Por questão de performance, é indicado fazer o insert de dados em uma única instrução ao invés de várias instruções, por exemplo:
+
+Fazendo a carga de 3 registros na tabela `produto_novo`.
+```sql
+-- Fazer assim
+insert into produto (nome, valor) values
+('celular', 1.500),
+('notebook', 3.000),
+('televisao', 1.800);
+
+-- Nao fazer assim
+insert into produto (nome, valor) values ('celular', 1.500);
+insert into produto (nome, valor) values ('notebook', 3.000);
+insert into produto (nome, valor) values ('televisao', 1.800);
+```
+
+Para inserção de dados em massa, é possível usar tanto `INSERT...SELECT` quanto `CREATE TABLE ... AS`
+
+Por exemplo, para fazer a inserção de todas as linhas da tabela `category` na tabela `category_stage`.
+
+```sql
+insert into category_stage
+(select * from category);
+
+-- ou
+
+create table category_stage as
+select * from category;
+```
+
+---
+
+### 7.3. Carregamento por ordem de sort key
+
+É recomendado carregar os dados por ordem de chave de classificação para evitar a necessidade de vacuum.
+
+Se cada lote de novos dados seguir as linhas existentes na tabela, seus dados serão adequadamente armazenados por ordem de classificação e você não precisará executar um vacuum.
+
+Você não precisa pré-classificar as linhas em cada carregamento, pois `COPY` classifica cada lote de dados de entrada durante o carregamento.
+
+Por exemplo, suponha que você carregue dados diariamente com base nas atividades do dia atual. Se sua chave de classificação for uma coluna de *timestamp*, seus dados serão armazenados na ordem de classificação. Essa ordem ocorre, pois os dados do dia atual são sempre anexados no final dos dados do dia anterior.
+
+---
+
+### 7.4. Carregamento em blocos sequenciais
+
+Se você precisar adicionar uma grande quantidade de dados, carregue-os em blocos sequenciais de acordo com a ordem de classificação e elimine a necessidade de vacuum.
+
+Por exemplo, suponha que você precise carregar uma tabela com eventos de janeiro de 2017 a dezembro de 2017. Supondo que cada mês está em um arquivo, carregue as linhas para janeiro, fevereiro e assim por diante. Sua tabela será completamente classificada quando seu carregamento for concluído e você não precisará executar um vacuum.
+
+Ao carregar conjuntos de dados muito grandes, o espaço necessário para classificar pode exceder o espaço total disponível. Ao carregar dados em blocos menores, você usará muito menos espaço intermediário de classificação durante cada carregamento.
+
+Além disso, o carregamento em blocos menores facilita a reinicialização se o comando `COPY` falhar e for revertido.
+
+---
+
+### 7.5. Narrow Tables
+
+São tabelas com muito poucas colunas, mas com um número muito grande de linhas. Para esses casos, as três colunas de identidade de metadados ocultas (`INSERT_XID`, `DELETE_XID`, `ROW_ID`) consumirão uma quantidade desproporcional de espaço em disco para a tabela.
+
+Para otimizar a compactação das colunas ocultas, carrega a tabela em uma única transação `COPY` sempre que possível. Se você carregar a tabela com vários comandos `COPY` distintos, a coluna `INSERT_XID` não será bem compactada.
+
+Você deverá realizar uma operação de limpeza se usar vários comandos COPY, mas isso não melhorará a compactação de INSERT_XID.
+
+---
+
+## 8. Descarregamento de Dados
+
+Para descarregar dados de tabelas para um conjunto de arquivos em um bucket do Amazon S3, você pode usar o comando `UNLOAD` com uma instrução `SELECT`.
+
+O descarregamento também ocorre de forma paralela, gerando um ou mais arquivos por slice node.
+
+Você pode especificar que o UNLOAD deve gravar os resultados em série para um ou mais arquivos adicionando a opção `PARALLEL OFF`.
+
+Você pode limitar o tamanho dos arquivos no S3 especificando o parâmetro `MAXFILESIZE`. Exemplo:
+
+```sql
+-- criando arquivos de 100 MB
+
+unload ('select * from venue')
+to 's3://amzn-s3-demo-bucket/tickit/unload/venue_' 
+iam_role 'arn:aws:iam::0123456789012:role/MyRedshiftRole'
+parallel off
+maxfilesize 100 mb;
+```
+
+O UNLOAD criptografa automaticamente os arquivos de dados usando a criptografia do lado do servidor do Amazon S3 (SSE-S3).
+
+Você pode usar qualquer instrução `SELECT` no UNLOAD, exceto com o uso de `LIMIT`.
+
+Exemplo:
+
+```sql
+unload ('select * from venue where year(date) = 2025')   
+to 's3://amzn-s3-demo-bucket/tickit/unload/venue_' 
+iam_role 'arn:aws:iam::0123456789012:role/MyRedshiftRole';
+```
+
+No exemplo anterior, os arquivos serão gerados com o prefixo `venue_`.
+
+```
+venue_0000_part_00
+venue_0001_part_00
+venue_0002_part_00
+venue_0003_part_00
+```
+
+Por padrão, UNLOAD grava dados em paralelo a vários arquivos, de acordo com o número de slices no cluster. Para gravar dados em um único arquivo, especifique a `PARALLEL OFF`. O tamanho máximo de um arquivo de dados é 6,2 GB. Se o tamanho dos dados for maior, o UNLOAD cria´ra arquivos adicionais de até 6,2 GB.
+
+Para sobrescrever os arquivos no bucket target, é preciso especificar `ALLOWOVERWRITE`:
+
+```sql
+unload ('select * from venue') 
+to 's3://amzn-s3-demo-bucket/venue_pipe_' 
+iam_role 'arn:aws:iam::0123456789012:role/MyRedshiftRole'
+manifest 
+allowoverwrite;
+```
+
+Para descarregar dados no Amazon S3 usando uma chave KMS, é preciso usar o parâmetro `KMS_KEY_ID`:
+
+```sql
+unload ('select venuename, venuecity from venue')
+to 's3://amzn-s3-demo-bucket/encrypted/venue_' 
+iam_role 'arn:aws:iam::0123456789012:role/MyRedshiftRole'
+KMS_KEY_ID '1234abcd-12ab-34cd-56ef-1234567890ab'
+encrypted;
+```
+
+Por default, o delimitador dos dados é o pipe ("|"), porém, é possível definir outro delimitador ou gerar os dados com largura fixa:
+
+```sql
+-- definindo o delimitador
+
+unload ('select * from venue')
+to 's3://amzn-s3-demo-bucket/tickit/venue/comma' 
+iam_role 'arn:aws:iam::0123456789012:role/MyRedshiftRole'
+delimiter ',';
+
+-- largura fixa
+
+unload ('select * from venue')
+to 's3://amzn-s3-demo-bucket/tickit/venue/fw' 
+iam_role 'arn:aws:iam::0123456789012:role/MyRedshiftRole'
+fixedwidth '0:3,1:100,2:30,3:2,4:6';
+```
+
+Exemplo dos dados gerados com largura fixa
+
+```
+20 Air Canada Centre         Toronto      ON0
+60 Rexall Place              Edmonton     AB0
+100U.S. Cellular Field       Chicago      IL40615
+200Al Hirschfeld Theatre     New York CityNY0
+240San Jose Repertory TheatreSan Jose     CA0
+300Kennedy Center Opera HouseWashington   DC0
+```
+
+---
+
+## 9. Tabelas e Views de Sistema
+
+Há vários tipos de tabelas e visões do sistema:
+
+* As visualizações `SVV` contém informações sobre objetos de banco de dados como referências as tabelas `STV` transitórias;
+* As visualizações `SYS` são usadas para monitorar o uso de consultas e workload para cluster e grupos de trabalho sem servidor;
+* As tabelas `STL` são geradas a partir de logs que foram mantidos em disco para apresentar um histórico do sistema;
+* Tabelas de `STV` são tabelas virtuais do sistema que contém snapshots dos dados atuais do sistema. Elas se baseiam em dados transitórios na memória e não são mantidas em logs baseados em disco ou em tabelas regulares;
+* As visões `SVCS` fornecem detalhes sobre consultas nos cluster principal e de escalabilidade da simultaneidade;
+* As visualizações `SVL` fornecem detalhes sobre consultas nos clusters principais.
+
+Exemplos de tabelas e visões de sistema:
+
+| Nome | Descrição |
+|-|-|
+| stl_load_commits | Status das ingestões com `COPY` |
+| stl_load_erros | Erros durante carregamentos específicos |
+| stl_error | Registra erros de processamento interno no Redshift |
+| stl_file_scan | Tempo de carregamento de arquivos ou para ver se um arquivo foi mesmo lido |
+| stl_s3client_error | Detalhes de erros encontrados durante a transferência de dados do Amazon S3 |
+| stl_unload_log | Lista dos arquivos que foram gravados no S3 |
+| sys_copy_job_detail | Status de COPY JOBS de ingestão |
+| sys_copy_job_info | Registra mensagens de um COPY JOB |
+| svl_qlog | Para verificar se uma consulta usa o cache de resultados |
+| pg_class_info | Estilo de distribuição das tabelas |
+| svv_table_info | Estilo de distribuição das tabelas |
+ svl_auto_worker_action | Ações que o Redshift executou automaticamente para alterar uma dist key de tabel |
+ | svv_alter_table_recommendations | Recomendações sobre alteração de chave de distribuição |
+
+Somente usuários com privilégios de `superuser` podem ver os dados completos das tabelas com categoria de superuser.
+
+Usuários regulares podem ver dados em tabelas visíveis para usuários, e geralmente, as linhas geradas por um usuário não são visíveis para outro usuário.
+
+---
+
+## 10. Vacuum
+
+Recupera espaço (limpeza) de linhas deletadas a restaura sort order. O Vacuum consome muito E/S, por isso, é ideal fazer em períodos com baixo uso do cluster para não concorrer com as consultas.
+
+É possível aplicar alguns tipos de Vacuum:
+
+* `VACUMM FULL`;
+* `VACUUM DELETE ONLY`: não aplica no sort;
+* `VACUUM SORT ONLY`: não libera espaço;
+* `VACUUM REINDEX`: analisa a distribuição de sort key columns e então faz um full vacuum.
+
+---
+
+## 11. Outros
+
+### 11.1. DB Link
+
+Conecta o Redshift ao PostgreSQL (RDS).
+
+É uma boa forma de copiar e sincronizar dados entre o  RDS PostgreSQL e o Redshit.
+
+---
+
+### 11.2. Federated Queries
+
+Redshift suporta executar queries em outros database, warehouses e lakes sem a necessidade de ETL.
+
+É possível executar queries nos dados do Amazon Aurora ou do RDS (MySQL ou PostgreSQL).
+
+![](./imagens/federated_query.png)
+
+É preciso estabelecer conexão entre o cluster do Redshift e o RDS/Aurora. Ambos precisam estar na mesma VPC Subnet ou criar um VPC Peering caso estejam em VPCs diferentes.
+
+As credenciais também precisam estar no Secrets Manager.
+
+O acesso do Redshift ao external data source é `read-only`.
