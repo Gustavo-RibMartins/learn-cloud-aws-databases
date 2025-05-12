@@ -11,6 +11,8 @@ Estudos do AWS RDS.
 > - [5. Backup](#5-backup)
 > - [6. Criptografia e Segurança](#6-criptografia-e-segurança)
 > - [7. Outras informações](#7-outras-informações)
+> - [8. Storage Auto Scaling](#8-storage-auto-scaling)
+> - [9. RDS Custom](#9-rds-custom)
 
 
 ---
