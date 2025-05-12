@@ -197,3 +197,25 @@ O storage é modificado automaticamente se:
 Para bancos de dados gerenciados Oracle e SQL Server.
 
 Te permite acessar a infra do database (EC2) e o SO para fazer configurações, instalação de patches, habilitar features nativas e acessar as instâncias EC2 usando SSH ou SSM Session Manager.
+
+---
+
+### 10. Amazon RDS Proxy
+
+Habilita aplicações para fazer pool e compartilhar DB connections estabelecidas com o database.
+
+Aumenta a eficiência reduzindo o stress nos recursos do database (CPU, RAM) e minimiza a abertura de conexões (e timeout).
+
+Serverless, autoscaling e tem alta disponibilidade (multi-AZ).
+
+Reduz o failover time em até 66%.
+
+Suporta RDS (MySQL, PostgreSQL, MariaDB, MS SQL Server) e Aurora.
+
+Não necessista de mudanças no código da maioria das aplicações.
+
+RDS Proxy nunca é publicamente acessível (deve ser acessado de uma VPC).
+
+Força IAM Authentication para o database, e seguramente armazena as credenciais no AWS Secrets Manager.
+
+![](./imagens/proxy.png)
