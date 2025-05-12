@@ -169,3 +169,29 @@ AWS recomenda criar seus databases em redes privadas, não públicas.
 * Quando ocorre um failover o RDS emite um evento que pode acionar um SNS, Lambda, CloudWatch;
 
 * Não é possível cancelar uma instância de banco de dados reservada.
+
+---
+
+### 8. Storage Auto Scaling
+
+Te ajuda a aumentar o tamanho do storage da instância de DB dinamicamente.
+
+RDS faz o scaling automático do storage quando detecta que você está consumindo mais storage do que o provisionado.
+
+![](./imagens/scaling.png)
+
+Você precisa configurar o `Maximum Storage Threshold`.
+
+O storage é modificado automaticamente se:
+
+* O free storage for menor que 10% do storage alocado;
+* Low-storage dura pelo menos 5 minutos;
+* 6 horas se passaram desde a última modificação.
+
+---
+
+### 9. RDS Custom
+
+Para bancos de dados gerenciados Oracle e SQL Server.
+
+Te permite acessar a infra do database (EC2) e o SO para fazer configurações, instalação de patches, habilitar features nativas e acessar as instâncias EC2 usando SSH ou SSM Session Manager.
