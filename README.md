@@ -7,7 +7,7 @@ Repositório para estudo de serviços de Database da AWS no contexto de Cloud Co
 **Banco de Dados Relacional**
 
 * [RDS](./rds/)
-* [Amazon Aurora]()
+* [Amazon Aurora](./aurora/)
 
 ---
 
